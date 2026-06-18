@@ -9,6 +9,7 @@ authors = [{ name = "Ruslan Dabysov" }]
 
 dependencies = [
     "aiogram>=3.4,<4",
+    "aiohttp>=3.9",
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "structlog>=24.1",

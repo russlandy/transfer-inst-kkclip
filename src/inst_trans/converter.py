@@ -34,5 +34,19 @@ def convert_url(url: str, target_host: str) -> str | None:
     return urlunsplit(("https", target_host, parts.path, parts.query, parts.fragment))
 
 
+def convert_to_mirrors(url: str, target_hosts: list[str]) -> list[str]:
+    """Сконвертировать Instagram-ссылку в список вариантов по каждому зеркалу.
+
+    Порядок зеркал сохраняется (первый — основной). Если ссылка не Instagram
+    или путь не из поддерживаемых — пустой список.
+    """
+    result: list[str] = []
+    for host in target_hosts:
+        converted = convert_url(url, host)
+        if converted is not None:
+            result.append(converted)
+    return result
+
+
 def _is_supported_path(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in _SUPPORTED_PATH_PREFIXES)

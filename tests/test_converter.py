@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from inst_trans.converter import convert_url
+from inst_trans.converter import convert_to_mirrors, convert_url
 
 TARGET = "www.kkclip.com"
 
@@ -64,3 +64,21 @@ def test_convert_supported(src: str, expected: str) -> None:
 )
 def test_convert_unsupported(src: str) -> None:
     assert convert_url(src, TARGET) is None
+
+
+def test_convert_to_mirrors_preserves_order() -> None:
+    src = "https://www.instagram.com/reel/ABC/?igsh=foo"
+    hosts = ["www.kkclip.com", "www.eeinstagram.com", "www.ddinstagram.com"]
+    assert convert_to_mirrors(src, hosts) == [
+        "https://www.kkclip.com/reel/ABC/?igsh=foo",
+        "https://www.eeinstagram.com/reel/ABC/?igsh=foo",
+        "https://www.ddinstagram.com/reel/ABC/?igsh=foo",
+    ]
+
+
+def test_convert_to_mirrors_unsupported() -> None:
+    assert convert_to_mirrors("https://example.com/reel/ABC/", ["www.kkclip.com"]) == []
+
+
+def test_convert_to_mirrors_empty_hosts() -> None:
+    assert convert_to_mirrors("https://www.instagram.com/reel/ABC/", []) == []

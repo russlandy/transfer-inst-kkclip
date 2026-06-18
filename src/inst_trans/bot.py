@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.default import DefaultBotProperties
@@ -10,13 +12,13 @@ from aiogram.filters import Command
 from aiogram.types import Message, MessageEntity
 
 from inst_trans.config import Settings
-from inst_trans.converter import convert_url
+from inst_trans.health import find_working_mirror
 from inst_trans.middlewares import ChatWhitelistMiddleware
 
 log = structlog.get_logger(__name__)
 
 
-def _build_router(target_host: str) -> Router:
+def _build_router(target_hosts: list[str]) -> Router:
     router = Router(name="root")
 
     @router.message(Command("chatid"))
@@ -26,9 +28,9 @@ def _build_router(target_host: str) -> Router:
     @router.message(Command("start"))
     async def cmd_start(message: Message) -> None:
         await message.answer(
-            "Привет! Я подменяю Instagram-ссылки на kkclip-зеркало, "
-            "чтобы видео проигрывалось прямо в Telegram. "
-            "Просто кидайте ссылки в чат — я буду отвечать преобразованной версией."
+            "Привет! Я подменяю Instagram-ссылки на зеркало, чтобы видео "
+            "проигрывалось прямо в Telegram. Просто кидайте ссылки в чат — "
+            "я проверю несколько зеркал и пришлю рабочее."
         )
 
     @router.message()
@@ -37,27 +39,37 @@ def _build_router(target_host: str) -> Router:
         if not urls:
             return
 
-        converted: list[str] = []
-        for url in urls:
-            new_url = convert_url(url, target_host)
-            if new_url is not None:
-                converted.append(new_url)
+        # Параллельно проверяем зеркала для каждой найденной IG-ссылки.
+        # Внутри find_working_mirror зеркала проверяются последовательно (порядок приоритета).
+        results = await asyncio.gather(
+            *(find_working_mirror(u, target_hosts) for u in urls),
+            return_exceptions=False,
+        )
 
-        if not converted:
+        # Убираем дубли и пропуски (None — ни одно зеркало не сработало).
+        working: list[str] = []
+        seen: set[str] = set()
+        for result in results:
+            if result is None or result in seen:
+                continue
+            seen.add(result)
+            working.append(result)
+
+        if not working:
+            log.warning(
+                "no_working_mirror",
+                chat_id=message.chat.id,
+                urls=urls,
+            )
             return
 
-        # Сохраняем порядок, убираем дубликаты, если одна ссылка встречается несколько раз.
-        unique = list(dict.fromkeys(converted))
-        reply_text = "\n".join(unique)
-
+        reply_text = "\n\n".join(working)
         log.info(
             "converted",
             chat_id=message.chat.id,
             user_id=message.from_user.id if message.from_user else None,
-            count=len(unique),
+            count=len(working),
         )
-        # parse_mode=None: текст — обычные URL, никаких HTML-сущностей в нём нет,
-        # пусть Telegram сам распознаёт ссылки и подгружает превью.
         await message.reply(reply_text, parse_mode=None)
 
     return router
@@ -87,14 +99,14 @@ async def run(settings: Settings) -> None:
     whitelist = ChatWhitelistMiddleware(settings.allowed_chat_ids)
     dp.message.middleware(whitelist)
 
-    dp.include_router(_build_router(settings.target_host))
+    dp.include_router(_build_router(settings.target_hosts))
 
     me = await bot.get_me()
     log.info(
         "bot_started",
         username=me.username,
         whitelist_size=len(settings.allowed_chat_ids),
-        target_host=settings.target_host,
+        target_hosts=settings.target_hosts,
     )
 
     try:
