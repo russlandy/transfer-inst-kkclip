@@ -21,6 +21,13 @@ from pathlib import Path
 
 import paramiko
 
+# По умолчанию Windows-консоль шлёт stdout в cp1251 — systemctl status печатает
+# bullet-точку '●', которая туда не лезет, и скрипт падает на самом безобидном
+# месте (после всех настоящих шагов). Заставим stdout быть UTF-8.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 INSTALL_DIR = "/opt/inst-trans"
 SERVICE_NAME = "inst-trans"
 SYSTEM_USER = "inst-trans"
@@ -67,10 +74,20 @@ def main() -> int:
         )
 
         _upload(client, local_env, f"{INSTALL_DIR}/.env", mode=0o600)
+
+        local_cookies = Path("cookies.txt")
+        if local_cookies.exists():
+            _upload(client, local_cookies, f"{INSTALL_DIR}/cookies.txt", mode=0o600)
+            cookies_chown = f"chown {SYSTEM_USER}:{SYSTEM_USER} {INSTALL_DIR}/cookies.txt && "
+        else:
+            print("(no local cookies.txt — skipping upload; bot will fall back to mirrors)")
+            cookies_chown = ""
+
         _step(
-            "права на .env и logs",
+            "права на .env, cookies, logs",
             client,
             f"chown {SYSTEM_USER}:{SYSTEM_USER} {INSTALL_DIR}/.env && "
+            f"{cookies_chown}"
             f"mkdir -p {INSTALL_DIR}/logs && "
             f"chown -R {SYSTEM_USER}:{SYSTEM_USER} {INSTALL_DIR}/logs && "
             "echo OK",
@@ -170,7 +187,8 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 PY="python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-NEED_PKGS="git ca-certificates"
+# ffmpeg нужен yt-dlp на случай, когда IG отдаёт раздельные потоки видео/аудио.
+NEED_PKGS="git ca-certificates ffmpeg"
 if ! dpkg -s "${PY}-venv" >/dev/null 2>&1; then
   NEED_PKGS="$NEED_PKGS ${PY}-venv"
 fi

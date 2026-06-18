@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator
@@ -21,6 +22,15 @@ class Settings(BaseSettings):
     allowed_chat_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list,
         description="Telegram chat IDs, в которых бот реагирует",
+    )
+
+    cookies_path: Path | None = Field(
+        default=None,
+        description=(
+            "Путь к Netscape-cookies-файлу IG-аккаунта для yt-dlp. "
+            "Если файла нет или путь пустой — скачивание отключено, бот сразу "
+            "отвечает ссылкой через зеркало."
+        ),
     )
 
     target_hosts: Annotated[list[str], NoDecode] = Field(

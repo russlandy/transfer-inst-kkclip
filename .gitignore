@@ -4,6 +4,8 @@
 .env.*.local
 *.pem
 *.key
+cookies.txt
+*cookies*.txt
 
 # --- Python ---
 __pycache__/
