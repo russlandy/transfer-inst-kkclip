@@ -1,0 +1,28 @@
+[Unit]
+Description=inst-trans Telegram bot (Instagram link rewriter)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=inst-trans
+Group=inst-trans
+WorkingDirectory=/opt/inst-trans
+EnvironmentFile=/opt/inst-trans/.env
+ExecStart=/opt/inst-trans/.venv/bin/python -m inst_trans
+Restart=on-failure
+RestartSec=5s
+
+# --- Безопасность ---
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/inst-trans/logs
+
+# --- Логи в journalctl ---
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
